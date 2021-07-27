@@ -1,0 +1,84 @@
+name: New Pin
+on:
+  issues:
+    types: [opened, edited]
+jobs:
+  check_issue:
+    name: Check issue is a (valid) new pin request
+    runs-on: ubuntu-latest
+    outputs:
+      valid_issue: ${{ steps.check_title.outputs.result == 'true' && steps.check_author.outputs.result == 'true' }}
+    steps:
+      - id: check_title
+        name: Check issue is a request to create a new pin
+        run: |
+          test "$ISSUE_TITLE" = "New Pin" \
+            && echo "::set-output name=result::true" \
+            || echo "::set-output name=result::false"
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+
+      - id: check_author
+        if: ${{ steps.check_title.outputs.result == 'true' }}
+        name: Check issue author is allowed to create pins
+        run: |
+          test "$PERMITTED_ASSOCIATION" = "*" -o "$AUTHOR_ASSOCIATION" = "$PERMITTED_ASSOCIATION" \
+            && echo "::set-output name=result::true" \
+            || echo "::set-output name=result::false"
+        env:
+          AUTHOR_ASSOCIATION: ${{ github.event.issue.author_association }}
+          PERMITTED_ASSOCIATION: '*'
+
+      - name: Close issue from author that is not allowed to create pins
+        if: ${{ steps.check_author.outputs.result == 'false' }}
+        run: |
+            gh issue comment "$ISSUE_URL" --body "Sorry, you do not have permission to create pins on this board."
+            gh issue close "$ISSUE_URL"
+        env:
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  add_pin:
+    name: Add pin to pins.json
+    needs: check_issue
+    if: ${{ needs.check_issue.outputs.valid_issue == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: 14.x
+
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+
+      - name: Setup git and gh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email ""
+
+      - name: Add pin
+        run: node .github/scripts/add-pin.js "$PINS_PATH" "$ISSUE_BODY"
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          PINS_PATH: "pins.json"
+
+      - name: Check output
+        run: git show
+
+      - name: Commit changes
+        run: git add . && git commit -m "Add new pin (#$ISSUE_NUMBER)"
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+
+      - name: Push changes
+        run: git push
+
+      - name: Close Issue
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "Pin added."
+          gh issue close "$ISSUE_NUMBER"
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
