@@ -1,6 +1,12 @@
 Dimboard
 ========
 
+**This project only sort of works, and I've lost interest in it (read: resubsribed to
+pinboard.in). As it stands I have no intentions of doing any more work on it (mainly
+because I hate working with actions/ci shit). I wrote a fair bit of this README before
+the project was ready for it... so if the following instructions below don't work, don't
+be suprised**
+
 GitHub-hosted [Pinboard](http://pinboard.in) alternative
 
 **NOTE**: This project is still a fairly basic prototype, as such some values
